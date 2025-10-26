@@ -172,14 +172,6 @@ python fast.py "query" --debug
 
 MIT
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Author
-
-Built by Vivek Dodia with Claude Code
-
 ## Repository
 
 https://github.com/vivek-dodia/fast
