@@ -4,11 +4,11 @@ A Python CLI tool that fetches workout data from intervals.icu and provides inte
 
 ## Features
 
-- 🏃 Fetches training data directly from intervals.icu API
-- 🤖 AI-powered analysis using OpenRouter (supports multiple models)
-- 📊 Analyzes fitness metrics, training load, and performance trends
-- 💬 Natural language queries - just ask questions in plain English
-- ⚡ Fast and lightweight - no local database needed
+- Fetches training data directly from intervals.icu API
+- AI-powered analysis using OpenRouter (supports multiple models)
+- Analyzes fitness metrics, training load, and performance trends
+- Natural language queries - just ask questions in plain English
+- Fast and lightweight - no local database needed
 
 ## Setup
 
