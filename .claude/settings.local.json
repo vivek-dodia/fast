@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:intervals.icu)",
+      "Bash(pip install:*)",
+      "Bash(python fast.py:*)",
+      "Bash(git config:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(python:*)",
+      "Bash(timeout 3 python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

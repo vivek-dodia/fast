@@ -14,6 +14,12 @@ class LLMAnalyzer:
         )
         self.model = model
 
+        # Detect if this is a reasoning model
+        self.is_reasoning_model = any(keyword in model.lower() for keyword in [
+            'o1', 'o3', 'deepseek-r1', 'qwq', 'gemini-2.0-flash-thinking',
+            'gemini-2.5-pro', 'reasoning'
+        ])
+
     def format_value(self, value: Any) -> str:
         """Format a value for display, handling None values."""
         if value is None:
@@ -68,13 +74,17 @@ class LLMAnalyzer:
         profile = data['profile']
         activities = data['activities']
         wellness = data['wellness']
+        fitness_trends = data.get('fitness_trends', [])
         date_range = data['date_range']
+        query_scope = data.get('query_scope', 'all activities')
 
         # Build the context string
         context = f"""# Training Data Analysis Context
 
-## Date Range
-Analyzing data from {date_range['start']} to {date_range['end']} ({date_range['days']} days)
+## Analysis Scope
+FOCUS: User is asking about **{query_scope}**
+Data available: {date_range['start']} to {date_range['end']} ({date_range['days']} days)
+Activities in focus: {len(activities)}
 
 ## Athlete Profile
 """
@@ -82,34 +92,65 @@ Analyzing data from {date_range['start']} to {date_range['end']} ({date_range['d
         # Athlete basic info
         context += f"- Athlete ID: {profile.get('id')}\n"
         context += f"- Name: {profile.get('name', 'N/A')}\n"
-        context += f"- Location: {profile.get('city', 'N/A')}, {profile.get('state', 'N/A')}, {profile.get('country', 'N/A')}\n"
         context += f"- Sex: {profile.get('sex', 'N/A')}\n"
 
         # Physical metrics
         context += f"\n### Physical Metrics\n"
         context += f"- Weight: {self.format_value(profile.get('icu_weight'))} kg\n"
         context += f"- Resting HR: {self.format_value(profile.get('icu_resting_hr'))} bpm\n"
+        if profile.get('icu_date_of_birth'):
+            context += f"- DOB: {profile.get('icu_date_of_birth')}\n"
 
-        # Fitness metrics (if available)
-        context += f"\n### Fitness Metrics\n"
-        if 'ctl' in profile:
+        # Current fitness metrics
+        context += f"\n### Current Fitness Metrics (Latest)\n"
+        if 'icu_ctl' in profile:
+            context += f"- Fitness (CTL): {self.format_value(profile.get('icu_ctl'))}\n"
+        elif 'ctl' in profile:
             context += f"- Fitness (CTL): {self.format_value(profile.get('ctl'))}\n"
-        if 'atl' in profile:
+
+        if 'icu_atl' in profile:
+            context += f"- Fatigue (ATL): {self.format_value(profile.get('icu_atl'))}\n"
+        elif 'atl' in profile:
             context += f"- Fatigue (ATL): {self.format_value(profile.get('atl'))}\n"
-        if 'tsb' in profile or 'rampRate' in profile:
-            tsb = profile.get('tsb') or profile.get('rampRate')
-            context += f"- Form (TSB): {self.format_value(tsb)}\n"
+
+        # Calculate TSB from CTL/ATL
+        ctl = profile.get('icu_ctl') or profile.get('ctl')
+        atl = profile.get('icu_atl') or profile.get('atl')
+        if ctl and atl:
+            tsb = ctl - atl
+            context += f"- Form (TSB): {tsb:+.1f}\n"
 
         # Sport-specific thresholds
         context += f"\n### Performance Thresholds\n"
-        if 'ftp' in profile and profile.get('ftp'):
+        if 'icu_ftp' in profile and profile.get('icu_ftp'):
+            context += f"- Cycling FTP: {self.format_value(profile.get('icu_ftp'))} watts\n"
+        elif 'ftp' in profile and profile.get('ftp'):
             context += f"- Cycling FTP: {self.format_value(profile.get('ftp'))} watts\n"
-        if 'ftpWattsPerKg' in profile and profile.get('ftpWattsPerKg'):
-            context += f"- FTP per kg: {self.format_value(profile.get('ftpWattsPerKg'))} w/kg\n"
-        if 'pace' in profile and profile.get('pace'):
+
+        if 'icu_ftp_watts_per_kg' in profile and profile.get('icu_ftp_watts_per_kg'):
+            context += f"- FTP per kg: {self.format_value(profile.get('icu_ftp_watts_per_kg'))} w/kg\n"
+
+        if 'icu_pace' in profile and profile.get('icu_pace'):
+            context += f"- Running Threshold Pace: {self.format_value(profile.get('icu_pace'))}\n"
+        elif 'pace' in profile and profile.get('pace'):
             context += f"- Running Threshold Pace: {self.format_value(profile.get('pace'))}\n"
-        if 'lthr' in profile and profile.get('lthr'):
+
+        if 'icu_lthr' in profile and profile.get('icu_lthr'):
+            context += f"- Lactate Threshold HR: {self.format_value(profile.get('icu_lthr'))} bpm\n"
+        elif 'lthr' in profile and profile.get('lthr'):
             context += f"- Lactate Threshold HR: {self.format_value(profile.get('lthr'))} bpm\n"
+
+        # Fitness trends over time (if available)
+        if fitness_trends and len(fitness_trends) > 0:
+            context += f"\n### Fitness Trend (CTL/ATL/TSB over period)\n"
+            # Show weekly snapshots
+            weekly = [fitness_trends[i] for i in range(0, len(fitness_trends), 7)][-8:]  # Last 8 weeks
+            for entry in weekly:
+                date = entry.get('id', '')
+                ctl_val = entry.get('ctl', 0)
+                atl_val = entry.get('atl', 0)
+                tsb_val = ctl_val - atl_val if ctl_val and atl_val else 0
+                context += f"- {date}: CTL={ctl_val:.1f}, ATL={atl_val:.1f}, TSB={tsb_val:+.1f}\n"
 
         # Activity summary
         context += f"\n## Activities Summary\n"
@@ -134,9 +175,9 @@ Analyzing data from {date_range['start']} to {date_range['end']} ({date_range['d
                     context += f"{total_distance:.1f} km | "
                 context += f"{total_time:.1f} hrs | Load: {total_load:.0f}\n"
 
-            # Detailed activity list with ALL available metrics
-            context += "\n### Detailed Activity Data:\n"
-            for i, activity in enumerate(activities[:20], 1):  # Limit to 20 most recent
+            # Detailed activity list - limit to 10 most recent with key metrics only
+            context += "\n### Recent Activities (Last 10):\n"
+            for i, activity in enumerate(activities[:10], 1):  # Limit to 10 most recent
                 name = activity.get('name', 'Unnamed')
                 act_type = activity.get('type', 'Unknown')
                 date = activity.get('start_date_local', 'Unknown date')[:10]
@@ -274,16 +315,42 @@ Analyzing data from {date_range['start']} to {date_range['end']} ({date_range['d
                 if power_meter:
                     context += f"   - Power Meter: {power_meter}\n"
 
-                # CTL/ATL at this point
+                # CTL/ATL/TSB at this point in time
                 ctl = activity.get('icu_ctl')
                 atl = activity.get('icu_atl')
-                if ctl or atl:
-                    context += f"   - Fitness/Fatigue after: "
-                    if ctl:
-                        context += f"CTL: {ctl:.1f}"
-                    if atl:
-                        context += f" ATL: {atl:.1f}"
+                if ctl and atl:
+                    tsb = ctl - atl
+                    ramp = activity.get('icu_ramp_rate', 0)
+                    context += f"   - Fitness/Fatigue after: CTL={ctl:.1f}, ATL={atl:.1f}, TSB={tsb:+.1f}"
+                    if ramp:
+                        context += f", Ramp={ramp:+.1f}"
                     context += "\n"
+
+                # Polarization index (training intensity distribution)
+                polarization = activity.get('polarization_index')
+                if polarization:
+                    context += f"   - Polarization Index: {polarization:.2f}\n"
+
+                # Variability index (for power-based activities)
+                vi = activity.get('icu_variability_index')
+                if vi:
+                    context += f"   - Variability Index: {vi:.2f}\n"
+
+                # W' metrics for cycling
+                w_prime_used = activity.get('icu_w_prime')
+                w_prime_max = activity.get('icu_pm_w_prime') or activity.get('icu_rolling_w_prime')
+                if w_prime_used and w_prime_max:
+                    w_prime_pct = (w_prime_used / w_prime_max) * 100
+                    context += f"   - W' Used: {w_prime_used:.0f}J / {w_prime_max:.0f}J ({w_prime_pct:.1f}%)\n"
+
+                # Joules/Work
+                joules = activity.get('icu_joules')
+                if joules:
+                    context += f"   - Total Work: {joules:.0f} kJ\n"
+
+                joules_above_ftp = activity.get('icu_joules_above_ftp')
+                if joules_above_ftp:
+                    context += f"   - Work Above FTP: {joules_above_ftp:.0f} kJ\n"
 
         # Add wellness data if available
         if wellness and len(wellness) > 0:
@@ -302,6 +369,93 @@ Analyzing data from {date_range['start']} to {date_range['end']} ({date_range['d
 
         return context
 
+    def filter_activities_by_query(self, activities: list, query: str) -> tuple:
+        """
+        Filter activities based on user query to focus analysis.
+
+        Returns:
+            (filtered_activities, focus_scope, scope_description)
+        """
+        from datetime import datetime, timedelta
+
+        query_lower = query.lower()
+        today = datetime.now().date()
+
+        # Single activity queries with type filtering
+        if any(word in query_lower for word in ['today', 'todays', "today's"]):
+            today_activities = [a for a in activities if a.get('start_date_local', '')[:10] == today.isoformat()]
+
+            # Check if specific activity type is mentioned
+            if 'run' in query_lower:
+                filtered = [a for a in today_activities if 'run' in a.get('type', '').lower()]
+                return filtered, 'today_run', "today's run"
+            elif 'ride' in query_lower or 'bike' in query_lower or 'cycle' in query_lower:
+                filtered = [a for a in today_activities if 'ride' in a.get('type', '').lower()]
+                return filtered, 'today_ride', "today's ride"
+            elif 'workout' in query_lower:
+                filtered = [a for a in today_activities if 'workout' in a.get('type', '').lower()]
+                return filtered, 'today_workout', "today's workout"
+            elif 'swim' in query_lower:
+                filtered = [a for a in today_activities if 'swim' in a.get('type', '').lower()]
+                return filtered, 'today_swim', "today's swim"
+            else:
+                return today_activities, 'today', "today's activities"
+
+        if 'yesterday' in query_lower:
+            yesterday = (today - timedelta(days=1)).isoformat()
+            yesterday_activities = [a for a in activities if a.get('start_date_local', '')[:10] == yesterday]
+
+            # Check if specific activity type is mentioned
+            if 'run' in query_lower:
+                filtered = [a for a in yesterday_activities if 'run' in a.get('type', '').lower()]
+                return filtered, 'yesterday_run', "yesterday's run"
+            elif 'ride' in query_lower or 'bike' in query_lower or 'cycle' in query_lower:
+                filtered = [a for a in yesterday_activities if 'ride' in a.get('type', '').lower()]
+                return filtered, 'yesterday_ride', "yesterday's ride"
+            else:
+                return yesterday_activities, 'yesterday', "yesterday's activities"
+
+        if any(word in query_lower for word in ['latest', 'most recent', 'last workout', 'last run', 'last ride']):
+            # Get the most recent activity of the mentioned type
+            if 'run' in query_lower:
+                filtered = [a for a in activities if 'run' in a.get('type', '').lower()][:1]
+                return filtered, 'latest', "latest run"
+            elif 'ride' in query_lower:
+                filtered = [a for a in activities if 'ride' in a.get('type', '').lower()][:1]
+                return filtered, 'latest', "latest ride"
+            else:
+                return activities[:1], 'latest', "latest activity"
+
+        # Time range queries
+        if 'this week' in query_lower:
+            week_start = (today - timedelta(days=today.weekday())).isoformat()
+            filtered = [a for a in activities if a.get('start_date_local', '')[:10] >= week_start]
+            return filtered, 'week', "this week's activities"
+
+        if 'last week' in query_lower:
+            week_start = (today - timedelta(days=today.weekday() + 7)).isoformat()
+            week_end = (today - timedelta(days=today.weekday() + 1)).isoformat()
+            filtered = [a for a in activities
+                       if week_start <= a.get('start_date_local', '')[:10] <= week_end]
+            return filtered, 'last_week', "last week's activities"
+
+        # Count-based queries
+        import re
+        match = re.search(r'last (\d+)', query_lower)
+        if match and not any(word in query_lower for word in ['days', 'weeks', 'months']):
+            count = int(match.group(1))
+            if 'run' in query_lower:
+                filtered = [a for a in activities if 'run' in a.get('type', '').lower()][:count]
+                return filtered, 'count', f"last {count} runs"
+            elif 'ride' in query_lower:
+                filtered = [a for a in activities if 'ride' in a.get('type', '').lower()][:count]
+                return filtered, 'count', f"last {count} rides"
+            else:
+                return activities[:count], 'count', f"last {count} activities"
+
+        # Default: return all activities for general analysis
+        return activities, 'all', "all activities"
+
     def analyze(self, training_data: Dict, user_query: str) -> str:
         """
         Analyze training data based on user's question.
@@ -313,38 +467,66 @@ Analyzing data from {date_range['start']} to {date_range['end']} ({date_range['d
         Returns:
             LLM's analysis response
         """
+        # Filter activities based on query
+        filtered_activities, scope, scope_desc = self.filter_activities_by_query(
+            training_data['activities'],
+            user_query
+        )
+
+        # Create a filtered copy of training data for focused analysis
+        focused_data = training_data.copy()
+        focused_data['activities'] = filtered_activities
+        focused_data['query_scope'] = scope_desc
+
         # Format the training data
-        context = self.format_training_data(training_data)
+        context = self.format_training_data(focused_data)
 
         # Build the full prompt
-        system_prompt = """You are an expert sports scientist and coach analyzing an athlete's training data from intervals.icu.
+        system_prompt = """You are an expert sports scientist and endurance coach providing detailed, specific training analysis.
 
-Provide clear, actionable insights based on the data. When analyzing:
-- Look for trends and patterns across all available metrics
-- Consider training load, intensity distribution, and recovery
-- Analyze heart rate zones and time distribution
-- Evaluate power metrics, normalized power, and intensity factor
-- Check for aerobic decoupling and efficiency factors
-- Review intervals and workout structure
-- Consider subjective metrics like RPE and feel
-- Reference specific workouts when relevant
-- Provide practical recommendations
-- Be concise but thorough
+CRITICAL: Be concise but complete. Use short, direct sentences. Avoid repetition and filler words.
 
-Key metrics explained:
-- CTL (Chronic Training Load / Fitness): 42-day weighted average of training load
-- ATL (Acute Training Load / Fatigue): 7-day weighted average of training load
-- TSB (Training Stress Balance / Form): CTL - ATL (positive = fresh, negative = fatigued)
-- Training Load: Measure of workout stress (similar to TSS)
-- TRIMP: Heart rate based training impulse
-- Intensity Factor: Ratio of normalized power to FTP (or similar for HR/pace)
-- Decoupling: HR drift relative to power/pace (>5% suggests aerobic deficiency or fatigue)
-- Efficiency Factor: Power or pace divided by heart rate (higher = better aerobic fitness)
-- Normalized Power: Weighted average power accounting for variability
-- eFTP: Estimated functional threshold power
-- HR Zones: Z1 (recovery), Z2 (aerobic base), Z3 (tempo), Z4 (threshold), Z5+ (VO2max/anaerobic)
-- RPE: Rate of Perceived Exertion (1-10 scale)
-- Session RPE: Overall session difficulty rating
+IMPORTANT: Check "Analysis Scope" - if user asks about specific workout (e.g., "today's run"), focus ONLY on that. Use broader data for context only.
+
+REQUIRED SECTIONS:
+
+1. **Current Fitness State** (2-3 sentences max)
+   - CTL/ATL/TSB interpretation + training trend
+
+2. **Workout Analysis** (Focus workouts only - be concise)
+   For each workout:
+   - Stats: duration, distance, type
+   - HR zones: "Z2: 32min, Z4: 8min" (time in each zone)
+   - Purpose: endurance/tempo/intervals?
+   - Key insight: what the data reveals (e.g., "HR drift = poor aerobic base")
+   - 1-2 improvements
+
+3. **Intensity Distribution**
+   - Zone breakdown (% or time)
+   - Polarization: 80/20 rule compliance?
+   - Missing zones?
+
+4. **Next Workouts** (Be VERY specific)
+   - Type: "90min easy run"
+   - HR targets: "60min Z2 (130-145bpm), 20min Z3 (145-155bpm)"
+   - Focus: "Nasal breathing in Z2"
+   - Avoid: "No Z4+ for 3 days"
+   - WHY: Brief rationale (e.g., "builds mitochondrial density")
+
+5. **7-Day Plan** (if general query)
+   - Day-by-day: Recovery/Hard/Specific session
+   - Brief (e.g., "Mon: 60min Z2 run, Tue: Rest, Wed: 4x5min Z4")
+
+WRITING RULES:
+- Short sentences. No fluff.
+- Use numbers and data
+- Reference dates/workouts specifically
+- Give exact HR/pace targets
+- Explain WHY concisely
+- No verbose introductions/summaries
+
+METRICS:
+CTL=fitness(42d), ATL=fatigue(7d), TSB=form, Z2=base, Z4=threshold, Ramp>8=risky
 """
 
         user_prompt = f"""{context}
@@ -352,17 +534,54 @@ Key metrics explained:
 ## User Question
 {user_query}
 
-Please analyze the data thoroughly and provide insights."""
+Provide detailed, specific coaching analysis. Be concise but complete. Use short sentences and bullet points."""
+
+        # Adjust parameters based on model type
+        if self.is_reasoning_model:
+            # Reasoning models need higher limits and different temperature
+            max_completion_tokens = 6000  # Reduced from 8000 for more concise responses
+            temperature = 1.0  # Reasoning models often work better at 1.0
+            extra_params = {}
+        else:
+            max_completion_tokens = 2000  # Reduced from 2500 for conciseness
+            temperature = 0.7
+            extra_params = {}
 
         # Call OpenRouter API
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.7,
-            max_tokens=4000  # Increased for more detailed responses
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=temperature,
+                max_completion_tokens=max_completion_tokens,  # Use max_completion_tokens instead of max_tokens
+                **extra_params
+            )
 
-        return response.choices[0].message.content
+            # Extract content from response
+            content = response.choices[0].message.content
+
+            # Check if response was cut off
+            finish_reason = response.choices[0].finish_reason
+            if finish_reason == 'length':
+                content += "\n\n*[Response was truncated due to length. Try asking a more specific question.]*"
+
+            return content
+
+        except Exception as e:
+            # Fallback with max_tokens if max_completion_tokens fails
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_completion_tokens
+                )
+                return response.choices[0].message.content
+            except Exception as fallback_e:
+                raise Exception(f"API Error: {str(e)}, Fallback Error: {str(fallback_e)}")

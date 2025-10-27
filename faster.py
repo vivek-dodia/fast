@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Fast - Workout Analyzer CLI Tool
+Faster
 Fetches data from intervals.icu and analyzes it using LLM via OpenRouter.
 """
 import sys
@@ -23,15 +23,15 @@ console = Console(force_terminal=True, legacy_windows=False)
 @click.option('--setup', is_flag=True, help='Show setup instructions')
 def main(query, days, setup):
     """
-    Fast - Workout Analyzer CLI Tool
+    Faster
 
     Fetches your training data from intervals.icu and analyzes it using AI.
 
     Examples:
-        fast "How's my training this month?"
-        fast "Analyze my last 5 runs"
-        fast "What should I focus on this week?"
-        fast --days 60 "Compare my fitness trends"
+        faster "How's my training this month?"
+        faster "Analyze my last 5 runs"
+        faster "What should I focus on this week?"
+        faster --days 60 "Compare my fitness trends"
     """
     if setup:
         show_setup_instructions()
@@ -39,12 +39,12 @@ def main(query, days, setup):
 
     if not query:
         console.print("[yellow]No query provided. Usage:[/yellow]")
-        console.print("  fast \"your question here\"")
+        console.print("  faster \"your question here\"")
         console.print("\nExamples:")
-        console.print("  fast \"How's my training this month?\"")
-        console.print("  fast \"Analyze my last 5 runs\"")
-        console.print("  fast --days 60 \"Compare my fitness trends\"")
-        console.print("\nFor setup help: fast --setup")
+        console.print("  faster \"How's my training this month?\"")
+        console.print("  faster \"Analyze my last 5 runs\"")
+        console.print("  faster --days 60 \"Compare my fitness trends\"")
+        console.print("\nFor setup help: faster --setup")
         return
 
     try:
@@ -71,7 +71,15 @@ def main(query, days, setup):
         console.print(f"[green]OK[/green] Fetched {activity_count} activities")
 
         # Analyze with LLM
-        console.print(f"[cyan]Analyzing with {Config.OPENROUTER_MODEL}...[/cyan]")
+        model_name = Config.OPENROUTER_MODEL
+        is_reasoning = analyzer.is_reasoning_model
+        model_type = "[magenta](reasoning mode)[/magenta]" if is_reasoning else ""
+        console.print(f"[cyan]Analyzing with {model_name}[/cyan] {model_type}")
+
+        # Show what we're analyzing
+        _, _, scope_desc = analyzer.filter_activities_by_query(training_data['activities'], query)
+        console.print(f"[dim]Focus: {scope_desc}[/dim]")
+
         analysis = analyzer.analyze(training_data, query)
 
         # Display results
@@ -100,7 +108,7 @@ def main(query, days, setup):
 def show_setup_instructions():
     """Display setup instructions."""
     instructions = """
-# Fast Setup Instructions
+# Faster Setup Instructions
 
 ## 1. Get your intervals.icu API credentials
 
@@ -135,7 +143,7 @@ pip install -r requirements.txt
 ## 5. Run the tool
 
 ```bash
-fast "How's my training this month?"
+faster "How's my training this month?"
 ```
 
 ## Example Queries

@@ -87,6 +87,32 @@ class IntervalsClient:
         response.raise_for_status()
         return response.json()
 
+    def get_fitness_trends(self, oldest: Optional[str] = None, newest: Optional[str] = None) -> List[Dict]:
+        """
+        Fetch daily fitness/CTL/ATL trends over time.
+
+        Args:
+            oldest: Start date in YYYY-MM-DD format
+            newest: End date in YYYY-MM-DD format
+
+        Returns:
+            List of daily fitness metrics
+        """
+        url = f"{self.base_url}/athlete/{self.athlete_id}/fitness-trend"
+        params = {}
+
+        if oldest:
+            params['oldest'] = oldest
+        if newest:
+            params['newest'] = newest
+
+        try:
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
+        except Exception:
+            return []
+
     def fetch_training_data(self, days_back: int = 30) -> Dict:
         """
         Fetch comprehensive training data for analysis.
@@ -95,7 +121,7 @@ class IntervalsClient:
             days_back: Number of days to look back from today
 
         Returns:
-            Dictionary containing athlete profile, activities, and wellness data
+            Dictionary containing athlete profile, activities, wellness, and fitness trends
         """
         # Calculate date range
         today = datetime.now().date()
@@ -114,10 +140,17 @@ class IntervalsClient:
         except Exception:
             wellness = []
 
+        # Try to get fitness trends (CTL/ATL over time)
+        try:
+            fitness_trends = self.get_fitness_trends(oldest=oldest_str, newest=newest_str)
+        except Exception:
+            fitness_trends = []
+
         return {
             'profile': profile,
             'activities': activities,
             'wellness': wellness,
+            'fitness_trends': fitness_trends,
             'date_range': {
                 'start': oldest_str,
                 'end': newest_str,

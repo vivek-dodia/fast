@@ -1,4 +1,4 @@
-# Fast - Workout Analyzer CLI Tool
+# Faster
 
 A Python CLI tool that fetches workout data from intervals.icu and provides intelligent analysis using AI through OpenRouter.
 
@@ -42,7 +42,7 @@ OPENROUTER_MODEL=google/gemini-2.5-flash
 ### 3. Run setup check
 
 ```bash
-python fast.py --setup
+python faster.py --setup
 ```
 
 ## Usage
@@ -50,39 +50,39 @@ python fast.py --setup
 ### Basic Usage
 
 ```bash
-python fast.py "your question here"
+python faster.py "your question here"
 ```
 
 ### Examples
 
 ```bash
 # General training analysis
-python fast.py "How's my training this month?"
+python faster.py "How's my training this month?"
 
 # Specific activity analysis
-python fast.py "Analyze my last 5 runs"
+python faster.py "Analyze my last 5 runs"
 
 # Fitness metrics
-python fast.py "What's my current fitness level?"
+python faster.py "What's my current fitness level?"
 
 # Performance trends
-python fast.py "Compare my interval sessions this week"
+python faster.py "Compare my interval sessions this week"
 
 # Training advice
-python fast.py "What should I focus on to improve my 10K time?"
+python faster.py "What should I focus on to improve my 10K time?"
 
 # Recovery check
-python fast.py "Am I overtraining?"
+python faster.py "Am I overtraining?"
 ```
 
 ### Advanced Options
 
 ```bash
 # Look back more days (default is 30)
-python fast.py --days 60 "Compare my fitness over the last 2 months"
+python faster.py --days 60 "Compare my fitness over the last 2 months"
 
 # Look back 90 days
-python fast.py --days 90 "Show my training volume trends"
+python faster.py --days 90 "Show my training volume trends"
 ```
 
 ## How It Works
@@ -117,8 +117,8 @@ The tool fetches:
 ## Project Structure
 
 ```
-fast/
-├── fast.py                  # Main CLI script
+faster/
+├── faster.py                # Main CLI script
 ├── config.py                # Configuration loader
 ├── intervals_client.py      # intervals.icu API client
 ├── llm_analyzer.py          # OpenRouter/LLM integration
@@ -143,7 +143,7 @@ fast/
 
 ### Configuration errors
 ```bash
-python fast.py --setup
+python faster.py --setup
 ```
 
 ### Missing credentials
@@ -156,7 +156,7 @@ Check your `.env` file has all required fields
 
 ### Debug mode
 ```bash
-python fast.py "query" --debug
+python faster.py "query" --debug
 ```
 
 ## Future Enhancements
@@ -174,4 +174,4 @@ MIT
 
 ## Repository
 
-https://github.com/vivek-dodia/fast
+https://github.com/vivek-dodia/faster
